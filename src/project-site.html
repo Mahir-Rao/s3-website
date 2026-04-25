@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CI/CD Pipeline — GitHub → Jenkins → S3</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Sora:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg: #06080f;
+      --surface: #0d1117;
+      --card: #111827;
+      --border: rgba(255,255,255,0.08);
+      --text: #e6edf3;
+      --muted: #7d8590;
+      --green: #3fb950;
+      --blue: #58a6ff;
+      --orange: #f0883e;
+      --purple: #bc8cff;
+      --red: #f85149;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth}
+    body{
+      background:var(--bg);color:var(--text);
+      font-family:'Sora',sans-serif;font-weight:300;
+      overflow-x:hidden;
+    }
+
+    /* ---------- NAV ---------- */
+    nav{
+      position:fixed;top:0;left:0;right:0;z-index:100;
+      display:flex;justify-content:space-between;align-items:center;
+      padding:1rem 3rem;
+      background:rgba(6,8,15,0.85);
+      border-bottom:1px solid var(--border);
+      backdrop-filter:blur(12px);
+      animation:fadeDown .6s ease both;
+    }
+    .nav-logo{
+      font-family:'IBM Plex Mono',monospace;
+      font-size:.85rem;color:var(--green);
+    }
+    .nav-logo span{color:var(--muted)}
+    .nav-links{display:flex;gap:2rem}
+    .nav-links a{
+      color:var(--muted);text-decoration:none;
+      font-size:.8rem;letter-spacing:.05em;
+      transition:color .2s;
+    }
+    .nav-links a:hover{color:var(--text)}
+    .status-dot{
+      display:flex;align-items:center;gap:.5rem;
+      font-size:.75rem;color:var(--green);
+      font-family:'IBM Plex Mono',monospace;
+    }
+    .dot{
+      width:7px;height:7px;border-radius:50%;
+      background:var(--green);
+      box-shadow:0 0 6px var(--green);
+      animation:pulse 2s ease-in-out infinite;
+    }
+
+    /* ---------- HERO ---------- */
+    .hero{
+      min-height:100vh;
+      display:flex;flex-direction:column;justify-content:center;
+      padding:8rem 3rem 4rem;
+      position:relative;overflow:hidden;
+    }
+    .grid-bg{
+      position:absolute;inset:0;
+      background-image:
+        linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);
+      background-size:40px 40px;
+      mask-image:radial-gradient(ellipse 80% 60% at 50% 0%,black,transparent);
+    }
+    .hero-badge{
+      display:inline-flex;align-items:center;gap:.6rem;
+      background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);
+      color:var(--green);font-size:.75rem;letter-spacing:.08em;
+      padding:.35rem .9rem;border-radius:20px;margin-bottom:2rem;
+      font-family:'IBM Plex Mono',monospace;
+      animation:fadeUp .6s .1s ease both;
+      width:fit-content;
+    }
+    h1{
+      font-size:clamp(2.2rem,6vw,4.5rem);
+      font-weight:700;line-height:1.08;
+      letter-spacing:-.03em;
+      animation:fadeUp .6s .2s ease both;
+    }
+    h1 .accent-green{color:var(--green)}
+    h1 .accent-blue{color:var(--blue)}
+    h1 .accent-orange{color:var(--orange)}
+    .hero-sub{
+      margin-top:1.5rem;max-width:560px;
+      color:var(--muted);font-size:1rem;line-height:1.8;
+      animation:fadeUp .6s .3s ease both;
+    }
+
+    /* ---------- TERMINAL BLOCK ---------- */
+    .terminal{
+      margin-top:2.5rem;
+      background:#0d1117;
+      border:1px solid var(--border);
+      border-radius:8px;max-width:580px;
+      font-family:'IBM Plex Mono',monospace;
+      animation:fadeUp .6s .4s ease both;
+      overflow:hidden;
+    }
+    .term-bar{
+      background:#161b22;padding:.6rem 1rem;
+      display:flex;align-items:center;gap:.5rem;
+      border-bottom:1px solid var(--border);
+    }
+    .term-dot{width:10px;height:10px;border-radius:50%}
+    .term-dot.r{background:#f85149}
+    .term-dot.y{background:#e3b341}
+    .term-dot.g{background:#3fb950}
+    .term-title{
+      font-size:.7rem;color:var(--muted);margin-left:.5rem;
+    }
+    .term-body{padding:1.2rem 1.4rem;font-size:.8rem;line-height:2}
+    .t-muted{color:var(--muted)}
+    .t-green{color:var(--green)}
+    .t-blue{color:var(--blue)}
+    .t-orange{color:var(--orange)}
+    .t-purple{color:var(--purple)}
+    .cursor{
+      display:inline-block;width:8px;height:14px;
+      background:var(--green);
+      animation:blink 1s step-end infinite;
+      vertical-align:middle;margin-left:2px;
+    }
+
+    /* ---------- SECTIONS ---------- */
+    section{padding:5rem 3rem}
+    .section-label{
+      font-family:'IBM Plex Mono',monospace;
+      font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;
+      color:var(--green);margin-bottom:.8rem;
+    }
+    h2{
+      font-size:clamp(1.6rem,3vw,2.4rem);
+      font-weight:700;letter-spacing:-.02em;margin-bottom:.5rem;
+    }
+    .section-sub{color:var(--muted);font-size:.95rem;line-height:1.7;max-width:500px}
+
+    /* ---------- TECH STACK ---------- */
+    .stack-grid{
+      margin-top:3rem;
+      display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+      gap:1px;background:var(--border);
+      border:1px solid var(--border);border-radius:8px;overflow:hidden;
+    }
+    .stack-card{
+      background:var(--card);padding:1.8rem 1.5rem;
+      transition:background .2s;
+      display:flex;flex-direction:column;gap:.8rem;
+    }
+    .stack-card:hover{background:#1c2333}
+    .stack-icon{font-size:1.6rem;width:40px;height:40px;display:flex;align-items:center;justify-content:center}
+    .stack-name{font-weight:600;font-size:.95rem}
+    .stack-role{
+      font-size:.78rem;color:var(--muted);line-height:1.5;
+    }
+    .stack-tag{
+      display:inline-block;margin-top:.3rem;
+      padding:.2rem .6rem;border-radius:4px;font-size:.65rem;
+      font-family:'IBM Plex Mono',monospace;letter-spacing:.04em;
+    }
+    .tag-green{background:rgba(63,185,80,.15);color:var(--green)}
+    .tag-blue{background:rgba(88,166,255,.15);color:var(--blue)}
+    .tag-orange{background:rgba(240,136,62,.15);color:var(--orange)}
+    .tag-purple{background:rgba(188,140,255,.15);color:var(--purple)}
+
+    /* ---------- FLOW SECTION ---------- */
+    .flow-wrap{margin-top:3rem}
+    .flow-step{
+      display:flex;gap:1.5rem;margin-bottom:1px;
+      background:var(--card);border:1px solid var(--border);
+      border-radius:8px;padding:1.6rem 1.8rem;
+      position:relative;transition:border-color .25s;
+      cursor:default;
+    }
+    .flow-step:hover{border-color:rgba(255,255,255,.18)}
+    .step-num{
+      font-family:'IBM Plex Mono',monospace;
+      font-size:1.8rem;font-weight:500;
+      color:var(--border);min-width:40px;
+      line-height:1;
+    }
+    .step-body{}
+    .step-title{font-weight:600;font-size:1rem;margin-bottom:.4rem}
+    .step-desc{font-size:.88rem;color:var(--muted);line-height:1.7}
+    .step-cmd{
+      margin-top:.8rem;
+      background:#0d1117;border:1px solid var(--border);
+      border-radius:4px;padding:.5rem .9rem;
+      font-family:'IBM Plex Mono',monospace;font-size:.75rem;
+      color:var(--green);display:inline-block;
+    }
+    .step-arrow{
+      text-align:center;color:var(--border);
+      font-size:1.2rem;padding:.3rem 0;
+      font-family:'IBM Plex Mono',monospace;
+    }
+
+    /* ---------- PIPELINE VISUAL ---------- */
+    .pipeline-vis{
+      margin-top:3rem;
+      background:var(--card);border:1px solid var(--border);
+      border-radius:8px;padding:2rem;overflow-x:auto;
+    }
+    .pipe-label{
+      font-family:'IBM Plex Mono',monospace;
+      font-size:.7rem;color:var(--muted);margin-bottom:1.5rem;
+    }
+    .pipe-stages{
+      display:flex;align-items:center;gap:0;
+      min-width:600px;
+    }
+    .pipe-stage{
+      flex:1;text-align:center;position:relative;
+    }
+    .pipe-box{
+      padding:.7rem .5rem;border-radius:6px;
+      font-size:.78rem;font-weight:600;
+      border:1px solid;
+      transition:transform .2s;
+    }
+    .pipe-box:hover{transform:translateY(-3px)}
+    .pipe-box.checkout{background:rgba(88,166,255,.1);border-color:rgba(88,166,255,.4);color:var(--blue)}
+    .pipe-box.validate{background:rgba(188,140,255,.1);border-color:rgba(188,140,255,.4);color:var(--purple)}
+    .pipe-box.deploy{background:rgba(63,185,80,.1);border-color:rgba(63,185,80,.4);color:var(--green)}
+    .pipe-box.cdn{background:rgba(240,136,62,.1);border-color:rgba(240,136,62,.4);color:var(--orange)}
+    .pipe-sub{font-size:.65rem;color:var(--muted);margin-top:.4rem;font-family:'IBM Plex Mono',monospace}
+    .pipe-arrow{
+      color:var(--muted);font-size:1rem;padding:0 .3rem;
+      flex-shrink:0;
+    }
+
+    /* ---------- LEARNINGS ---------- */
+    .learn-grid{
+      margin-top:3rem;
+      display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;
+    }
+    .learn-card{
+      background:var(--card);border:1px solid var(--border);
+      border-radius:8px;padding:1.5rem;
+      transition:border-color .25s;
+    }
+    .learn-card:hover{border-color:rgba(255,255,255,.18)}
+    .learn-icon{font-size:1.3rem;margin-bottom:.8rem}
+    .learn-title{font-weight:600;font-size:.95rem;margin-bottom:.5rem}
+    .learn-desc{font-size:.83rem;color:var(--muted);line-height:1.6}
+
+    /* ---------- FOOTER ---------- */
+    footer{
+      border-top:1px solid var(--border);
+      padding:2rem 3rem;
+      display:flex;justify-content:space-between;align-items:center;
+      font-size:.8rem;color:var(--muted);
+      font-family:'IBM Plex Mono',monospace;
+    }
+
+    /* ---------- ANIMATIONS ---------- */
+    @keyframes fadeDown{from{opacity:0;transform:translateY(-16px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+
+    /* scroll reveal */
+    .reveal{opacity:0;transform:translateY(28px);transition:opacity .6s ease,transform .6s ease}
+    .reveal.visible{opacity:1;transform:none}
+
+    @media(max-width:768px){
+      nav{padding:1rem 1.2rem}
+      .nav-links{display:none}
+      .hero,section{padding:6rem 1.2rem 3rem}
+      footer{flex-direction:column;gap:.5rem;text-align:center}
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">~/projects/<span>cicd-s3</span></div>
+  <div class="nav-links">
+    <a href="#stack">Stack</a>
+    <a href="#flow">How it works</a>
+    <a href="#pipeline">Pipeline</a>
+    <a href="#learnings">Learnings</a>
+  </div>
+  <div class="status-dot"><div class="dot"></div> pipeline live</div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="grid-bg"></div>
+  <div class="hero-badge">🚀 DevOps Project · CI/CD Pipeline</div>
+  <h1>
+    Push code.<br/>
+    <span class="accent-green">Jenkins</span> builds.<br/>
+    <span class="accent-blue">S3</span> ships it.
+  </h1>
+  <p class="hero-sub">
+    A fully automated deployment pipeline. Every git push to GitHub triggers a webhook, Jenkins picks it up on a dedicated slave node, and the site lands on AWS S3 — zero manual steps.
+  </p>
+  <div class="terminal">
+    <div class="term-bar">
+      <div class="term-dot r"></div>
+      <div class="term-dot y"></div>
+      <div class="term-dot g"></div>
+      <span class="term-title">jenkins-slave — bash</span>
+    </div>
+    <div class="term-body">
+      <div><span class="t-muted">[checkout]</span> &nbsp;<span class="t-blue">Cloning repository...</span></div>
+      <div><span class="t-muted">[validate]</span> &nbsp;<span class="t-purple">✓ index.html found</span></div>
+      <div><span class="t-muted">[deploy] &nbsp;</span> &nbsp;<span class="t-orange">Syncing to s3://your-bucket/</span></div>
+      <div><span class="t-muted">[deploy] &nbsp;</span> &nbsp;<span class="t-green">✓ Upload complete</span></div>
+      <div><span class="t-muted">[post] &nbsp;&nbsp;</span> &nbsp;<span class="t-green">✓ Pipeline succeeded</span> <span class="cursor"></span></div>
+    </div>
+  </div>
+</section>
+
+<!-- TECH STACK -->
+<section id="stack">
+  <div class="section-label reveal">// tech stack</div>
+  <h2 class="reveal">Tools powering this pipeline</h2>
+  <p class="section-sub reveal">Each piece has a specific job. Nothing redundant.</p>
+  <div class="stack-grid reveal">
+    <div class="stack-card">
+      <div class="stack-icon">🐙</div>
+      <div class="stack-name">GitHub</div>
+      <div class="stack-role">Source of truth. Every push is the trigger that starts the whole pipeline.</div>
+      <span class="stack-tag tag-blue">Webhooks · Git</span>
+    </div>
+    <div class="stack-card">
+      <div class="stack-icon">🔧</div>
+      <div class="stack-name">Jenkins Master</div>
+      <div class="stack-role">Receives webhook events from GitHub. Orchestrates pipeline runs and delegates work to the slave.</div>
+      <span class="stack-tag tag-orange">EC2 · Port 8080</span>
+    </div>
+    <div class="stack-card">
+      <div class="stack-icon">⚙️</div>
+      <div class="stack-name">Jenkins Slave</div>
+      <div class="stack-role">Does the actual work — checkout, validate, deploy. Isolated from the master node.</div>
+      <span class="stack-tag tag-purple">EC2 · SSH Agent</span>
+    </div>
+    <div class="stack-card">
+      <div class="stack-icon">☁️</div>
+      <div class="stack-name">AWS S3</div>
+      <div class="stack-role">Hosts the static website with versioning enabled. Public read policy serves files globally.</div>
+      <span class="stack-tag tag-green">Static Hosting</span>
+    </div>
+    <div class="stack-card">
+      <div class="stack-icon">📄</div>
+      <div class="stack-name">Jenkinsfile</div>
+      <div class="stack-role">Pipeline as code. Lives in the repo itself — the infra is version-controlled alongside the website.</div>
+      <span class="stack-tag tag-blue">Declarative Pipeline</span>
+    </div>
+    <div class="stack-card">
+      <div class="stack-icon">🔑</div>
+      <div class="stack-name">IAM + Credentials</div>
+      <div class="stack-role">AWS keys stored in Jenkins credential store — never in code. Least privilege IAM policy on S3.</div>
+      <span class="stack-tag tag-orange">Security</span>
+    </div>
+  </div>
+</section>
+
+<!-- FLOW -->
+<section id="flow">
+  <div class="section-label reveal">// how it works</div>
+  <h2 class="reveal">The deployment flow</h2>
+  <p class="section-sub reveal">From a git push to a live website — step by step.</p>
+  <div class="flow-wrap reveal">
+
+    <div class="flow-step">
+      <div class="step-num">01</div>
+      <div class="step-body">
+        <div class="step-title">Create repo & project structure</div>
+        <div class="step-desc">Initialize a local folder, create a <code style="color:var(--green);background:#0d1117;padding:1px 5px;border-radius:3px;font-size:.8em">src/</code> directory for website files and a <code style="color:var(--green);background:#0d1117;padding:1px 5px;border-radius:3px;font-size:.8em">Jenkinsfile</code> at root. Push to GitHub.</div>
+        <div class="step-cmd">mkdir s3-website && cd s3-website && git init</div>
+      </div>
+    </div>
+    <div class="step-arrow">↓</div>
+
+    <div class="flow-step">
+      <div class="step-num">02</div>
+      <div class="step-body">
+        <div class="step-title">Create & configure S3 bucket</div>
+        <div class="step-desc">Create bucket, enable versioning, turn on static website hosting, and apply a public-read bucket policy. Versioning means every deploy is recoverable.</div>
+        <div class="step-cmd">aws s3 mb s3://your-bucket --region us-east-1</div>
+      </div>
+    </div>
+    <div class="step-arrow">↓</div>
+
+    <div class="flow-step">
+      <div class="step-num">03</div>
+      <div class="step-body">
+        <div class="step-title">Jenkins Master — connect Slave</div>
+        <div class="step-desc">The slave EC2 needs Java, AWS CLI, and Git. Add it to master via SSH in Jenkins → Manage Nodes. Label it <code style="color:var(--purple);background:#0d1117;padding:1px 5px;border-radius:3px;font-size:.8em">slave</code> — the Jenkinsfile targets this label.</div>
+      </div>
+    </div>
+    <div class="step-arrow">↓</div>
+
+    <div class="flow-step">
+      <div class="step-num">04</div>
+      <div class="step-body">
+        <div class="step-title">Store AWS credentials in Jenkins</div>
+        <div class="step-desc">AWS Access Key ID and Secret stored as a Jenkins credential (type: AWS). The Jenkinsfile references the credential ID — keys never touch the codebase.</div>
+        <div class="step-cmd">Credentials ID: aws-s3-credentials</div>
+      </div>
+    </div>
+    <div class="step-arrow">↓</div>
+
+    <div class="flow-step">
+      <div class="step-num">05</div>
+      <div class="step-body">
+        <div class="step-title">Create Jenkins Pipeline job</div>
+        <div class="step-desc">New item → Pipeline. Source: SCM → your GitHub repo. Trigger: GitHub hook trigger for GITScm polling. Script path: <code style="color:var(--orange);background:#0d1117;padding:1px 5px;border-radius:3px;font-size:.8em">Jenkinsfile</code>.</div>
+      </div>
+    </div>
+    <div class="step-arrow">↓</div>
+
+    <div class="flow-step">
+      <div class="step-num">06</div>
+      <div class="step-body">
+        <div class="step-title">Configure GitHub Webhook</div>
+        <div class="step-desc">GitHub repo → Settings → Webhooks. Payload URL points to Jenkins master public IP on port 8080. Event: push only. Now every commit auto-triggers Jenkins.</div>
+        <div class="step-cmd">http://&lt;MASTER-IP&gt;:8080/github-webhook/</div>
+      </div>
+    </div>
+    <div class="step-arrow">↓</div>
+
+    <div class="flow-step">
+      <div class="step-num">07</div>
+      <div class="step-body">
+        <div class="step-title">Push code → site is live</div>
+        <div class="step-desc">git push triggers the webhook → Jenkins runs 4 stages on the slave → files sync to S3 → website is updated. The full loop takes under a minute.</div>
+        <div class="step-cmd">git push origin main ✓</div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- PIPELINE STAGES -->
+<section id="pipeline">
+  <div class="section-label reveal">// jenkinsfile stages</div>
+  <h2 class="reveal">What runs inside Jenkins</h2>
+  <p class="section-sub reveal">4 declarative stages, all executing on the slave node.</p>
+  <div class="pipeline-vis reveal">
+    <div class="pipe-label">$ running on: jenkins-slave (label: slave)</div>
+    <div class="pipe-stages">
+      <div class="pipe-stage">
+        <div class="pipe-box checkout">Checkout</div>
+        <div class="pipe-sub">clone repo</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-stage">
+        <div class="pipe-box validate">Validate</div>
+        <div class="pipe-sub">check files exist</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-stage">
+        <div class="pipe-box deploy">Deploy to S3</div>
+        <div class="pipe-sub">aws s3 sync</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-stage">
+        <div class="pipe-box cdn">Invalidate CDN</div>
+        <div class="pipe-sub">optional CloudFront</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- LEARNINGS -->
+<section id="learnings">
+  <div class="section-label reveal">// key learnings</div>
+  <h2 class="reveal">What this project teaches</h2>
+  <p class="section-sub reveal">Skills that translate directly to real engineering teams.</p>
+  <div class="learn-grid reveal">
+    <div class="learn-card">
+      <div class="learn-icon">🔗</div>
+      <div class="learn-title">Event-driven automation</div>
+      <div class="learn-desc">Webhooks replace polling. A git push fires an HTTP POST — Jenkins reacts immediately. This is how modern CI/CD actually works.</div>
+    </div>
+    <div class="learn-card">
+      <div class="learn-icon">🏗️</div>
+      <div class="learn-title">Master / Slave architecture</div>
+      <div class="learn-desc">Master orchestrates, slave executes. Isolating workloads means your master stays stable and slaves can be scaled or replaced independently.</div>
+    </div>
+    <div class="learn-card">
+      <div class="learn-icon">📦</div>
+      <div class="learn-title">Pipeline as code</div>
+      <div class="learn-desc">The Jenkinsfile lives in the repo. Your pipeline is version-controlled, reviewable, and reproducible — not a click-ops setup hidden in a UI.</div>
+    </div>
+    <div class="learn-card">
+      <div class="learn-icon">🔐</div>
+      <div class="learn-title">Secrets management</div>
+      <div class="learn-desc">AWS credentials stored in Jenkins credential store, injected at runtime. Keys never appear in code, logs, or git history.</div>
+    </div>
+    <div class="learn-card">
+      <div class="learn-icon">📜</div>
+      <div class="learn-title">S3 versioning</div>
+      <div class="learn-desc">Every deploy creates a new object version. A bad push? Roll back in seconds. This is the foundation of safe, auditable deployments.</div>
+    </div>
+    <div class="learn-card">
+      <div class="learn-icon">⚡</div>
+      <div class="learn-title">Static site delivery</div>
+      <div class="learn-desc">S3 + CloudFront is how massive sites serve millions of users. No server to manage, no runtime — just files delivered from the edge.</div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <span>~/s3-website · CI/CD Pipeline Project</span>
+  <span>GitHub → Jenkins → S3 · built to learn DevOps</span>
+</footer>
+
+<script>
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => { if(e.isIntersecting) e.target.classList.add('visible') })
+  }, { threshold: 0.12 });
+  document.querySelectorAll('.reveal').forEach(el => obs.observe(el));
+</script>
+</body>
+</html>
